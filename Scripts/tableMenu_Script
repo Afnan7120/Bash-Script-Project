@@ -1,0 +1,643 @@
+#!/bin/bash
+shopt -s extglob
+
+function checkAttributeName()
+{
+	
+	arrayOfKeywords=("SELECT" "INSERT" "DELETE" "UPDATE" "GRANT" "REVOKE" "ADD" "ALTER" "COLUMN" "TABLE" "ROW" "FROM" "AND" "OR" "AS" "DROP" "HAVING" "WHERE" "EXIT" "CREATE")
+	
+	
+	for n in ${arrayOfKeywords[@]}
+	do
+	    upperColName=`echo $1 | tr '[a-z]' '[A-Z]'`
+	    if [[ $upperColName == $n ]];
+	    then
+	    	
+		 echo -e "\t-- This is a  Reserved word !! --\n\t------------Choose another Name ------------"
+		  y=0
+		  return $y
+	    fi
+	done
+	
+	if ! [[ $1 =~ ^[a-zA-Z]+[a-zA-Z0-9_]*$ ]];then
+		echo -e "\t--  Invalid  Name , please Enter a name without a Special character !--"
+		y=0
+		
+	else
+		y=1
+	fi
+	
+	return $y
+	
+}
+
+function createTable()
+{	
+	arrayOfAttributesNames=()
+	arrayOfAttributesTypes=()
+	
+	read -p "Enter Number Of Attributes :- " attributesNumber
+	
+	case $attributesNumber in
+	+([1-9])) 
+		
+		for (( i=0; i<attributesNumber; i++ ))	
+		do
+		if (($i == 0))
+		then
+			echo -e "\t\t -------  The 1'st attribute will be Primary Key -------"
+		fi 
+			read -p "Enter Name of '$((i+1))' attribute :- " attributeName
+			checkAttributeName $attributeName
+			isvaild=$?
+			if (($isvaild==1))
+			then
+				arrayOfAttributesNames[$i]=$attributeName
+				echo -e "What is data type of '$attributeName' \n1-int\t\t 2-string\n"
+				read -p "Enter a vaild option " dataTypeOption 
+		
+				case $dataTypeOption in 
+				    1) 
+					echo -e "\t\t ------- created '$attributeName' with Data Type 'int' -------"
+					arrayOfAttributesTypes[$i]='int';;
+				    2)
+					echo -e "\t\t ------- created '$attributeName' with Data Type 'str' \t\t -------" 
+					arrayOfAttributesTypes[$i]='str';;
+					
+				    *)
+					echo -e "Enter a valid Option\nEnter attribute again"
+				 	createTable $1 $2 $3;;
+				esac
+			else
+				createTable $1 $2 $3
+			fi
+		done ;;
+ 	*)
+ 		echo -e "invaild number\nTry again"
+ 		createTable $1 $2 $3 ;;
+	esac		
+			 
+		
+	attributesNames=$(IFS=\|; echo "${arrayOfAttributesNames[*]}")
+    attributesTypes=$(IFS=\|; echo "${arrayOfAttributesTypes[*]}")
+
+	echo "$attributesNames" > ./DataBases/"$1"/"$2"
+	echo "$attributesTypes" >> ./DataBases/"$1"/"$2"
+	echo "pk|"  >> ./DataBases/"$1"/"$2"
+	echo "$attributesNames" > ./DataBases/"$1"/"$3" 
+	
+}
+
+
+
+function checkTableName() 
+{
+	# first vaildation of keywods
+	arrayOfKeywords=("SELECT" "INSERT" "DELETE" "UPDATE" "GRANT" "REVOKE" "ADD" "ALTER" "COLUMN" "TABLE" "ROW" "FROM" "AND" "OR" "AS" "DROP" "HAVING" "WHERE" "EXIT" "CREATE")
+	
+	read -p "Enter Table Name ;- " tableName
+	
+	if [[ -f ./DataBases/"$1"/"$tableName" ]];
+	then
+		echo -e "\t  ------------ '$tableName' TABLE Already Exists ----------- "
+		checkTableName $1
+	else
+		#check if the user input is a keyword------------
+		for i in ${arrayOfKeywords[@]}
+		do
+			upperTableName=`echo $tableName | tr '[a-z]' '[A-Z]'`
+			if [[ $upperTableName == $i ]];then
+				echo -e "\t   ------------ This '$tableName' Table name is invalid----------- "
+				echo -e "\t   -----------------  Choose  a valid Name! ----------------- "
+			        checkTableName $1
+			        return 
+			fi		
+		done
+			
+		if [[ $tableName =~ ^[a-zA-Z]+[a-zA-Z0-9_]*$ ]];
+		then 
+			touch ./DataBases/"$1"/."$tableName".metadata
+			touch ./DataBases/"$1"/"$tableName"	
+			createTable  $1 ."$tableName".metadata $tableName
+		else
+			echo -e "\t   ------------ This '$tableName' Table name is invalid----------- "
+			echo -e "\t   -----------------  Choose  a valid Name! ----------------- " 
+			checkTableName $1
+		fi
+				
+	fi
+	
+}
+
+
+
+function dropTable(){
+	
+	read -p "Enter Table name:- " tableName
+	
+	if [ -e ./DataBases/"$1"/"$tableName" ]
+	then
+		while true;
+		do
+			read -p "Are you sure to delete '$tableName' Table ? Enter [Y or N]-->  " answer
+			answer=$(LC_ALL=C tr 'A-Z' 'a-z' <<< "$answer")
+			if [[ $answer == "yes" || $answer == "y" ]]; then
+					rm ./DataBases/"$1"/"$tableName"
+					rm ./DataBases/"$1"/."$tableName".metadata
+					echo -e "\n\t ------------ '$tableName' TABLE Deleted Successfully----------- "
+					break
+			elif [[ $answer == "no"  || $answer == "n" ]]; then
+					echo -e "\n\t  ------------ '$tableName' TABLE Deleting Skipped----------- "
+					break
+			else
+					echo -e "\n\t ------------ Wrong input please choose yes(y) or no(n)----------- \n"
+				fi
+		done
+		
+	else
+		echo -e "\t  ------------ This '$tableName' Table Not Exists -----------  \n"
+		dropTable $1
+		
+	fi
+
+}
+
+
+
+function insertInto()
+{
+
+	colNamesArr=()
+	colTypesArr=()
+	read  tableName
+	#checking if table name exits
+	while ! [[ -f ./DataBases/"$1"/"$tableName" ]];
+	do
+		echo -e "\t  ------------ This '$tableName' Table Not Exists ----------- "
+		read -p "\nEnter vaild table name OR 'exit' : " tableName
+		if [[ $tableName == "EXIT" || $tableName == "exit" ]];
+		then
+			exit
+		fi
+	done
+	columnNames=`sed  -n '1p' ./DataBases/"$1"/."$tableName".metadata`
+	columnTypes=`sed -n '2p' ./DataBases/"$1"/."$tableName".metadata`
+	IFS="|"
+	#pushing into colnames array
+	for name in $columnNames
+	do
+		colNamesArr+=("$name")
+	done 
+		echo -e "\t ---- This '$tableName' table have '${#colNamesArr[@]}' attributes --->  ${colNamesArr[@]} ----"
+	#pushing types into types name array
+	for type in $columnTypes
+	do 
+		colTypesArr+=("$type")
+		let arrLen+=1
+	done
+	#inserting into table ====>>>
+	#declare my varaiable
+	for ((i=0; i < arrLen; i++))
+	do
+		read -p  "Insert '${colNamesArr[$i]}' value: " input
+		if [[ ${colTypesArr[$i]} == "int" ]];then
+			while ! [[ $input =~ ^[0-9]+$ ]]
+			do
+				read -p "---- Invalid Datatype, Enter '${colTypesArr[$i]}' type for '${colNamesArr[$i]}': ----" input
+			done
+			#check the unique value only if the column is PK
+			if [[ $i == 0 ]];
+			then
+				exitStatus=1
+				while [[ $exitStatus != 0 ]]
+				do
+					awk -v check=$input 'BEGIN {
+					FS="|";}
+					{
+						if ($1 == check) {
+							exit 2
+						}		
+					}' ./DataBases/"$1"/"$tableName"
+					exitStatus=$?
+					if [[ $exitStatus == 0 ]];then
+						break
+					fi
+					read -p " ------------ ${colNamesArr[$i]} must be unique, Enter ${colNamesArr[$i]} ------------ :" input
+				done
+			fi
+		fi
+		if [[ ${colTypesArr[$i]} == "str" ]];then
+			while ! [[ $input =~ ^[a-zA-Z]+[a-zA-Z0-9_]*$ ]]
+			do
+				read -p "invalid datatype, Enter '${colTypesArr[$i]}' type for '${colNamesArr[$i]}': " input
+			done
+		fi
+		if [[ $i == 0 ]];
+			then
+				exitStatus=1
+				while [[ $exitStatus != 0 ]]
+				do
+					awk -v check=$input 'BEGIN {
+					FS="|";}
+					{
+						if ($1 == check) {
+							exit 2
+						}		
+					}' ./DataBases/"$1"/"$tableName"
+					exitStatus=$?
+					if [[ $exitStatus == 0 ]];then
+						break
+					fi
+					read -p " ------------ ${colNamesArr[$i]} must be unique, Enter ${colNamesArr[$i]} ------------ :" input
+				done
+		fi
+		IFS=" "
+		insertStr+="$input|"
+	done
+	insertStr="${insertStr%|}"
+	echo $insertStr >> ./DataBases/"$1"/"$tableName"
+
+	echo -e "\n\t\t ---- Data inserted Successfully into '$tableName' Table ------- "
+	
+}
+
+function convertColNameToArray() {
+
+	columnNames=`sed  -n '1p' ./DataBases/"$1"/."$2".metadata`
+	IFS="|"
+	arrayOfColNames=()
+	for cloName in $columnNames
+	do
+		arrayOfColNames+=("$cloName")
+	done 
+	echo -e "\t --------- $columnNames --------\n"
+}
+
+
+
+function selectFromTable() 
+{
+	read tableName	
+	if [ -e ./DataBases/"$1"/"$tableName" ]
+	then 
+		echo -e "\t\t\t\t   1- SELECT ALL \n\t\t2- SELECT by column Name \t3- select by column value"
+		read -p "Enter Select option:- " selectOption
+		case $selectOption in 
+		1)
+			cat ./DataBases/"$1"/"$tableName";;
+		2)
+		
+			convertColNameToArray "$1" "$tableName"
+			
+			for (( i=0; i<${#arrayOfColNames[@]}; i++))
+			do
+				echo -e "\t- To select '${arrayOfColNames[i]}' column Enter '$((i+1))'"
+			done
+			
+			read -p "Enter select Option: " selectOption
+			
+			if (($selectOption > 0 && $selectOption <= ${#arrayOfColNames[@]}))
+			then
+                		dataColumn=$(cut -d '|' -f $selectOption "./DataBases/$1/$tableName")
+                		echo "--------"
+                		echo -e "$dataColumn"
+                	else 
+                		echo -e "\t--------- invaild column --------- \n\t--------- Try again --------- \n\t--------- Enter Table Name --------- " 
+                		selectFromTable $1
+                	fi;;
+                3)
+                	convertColNameToArray "$1" "$tableName"
+                	
+			for (( i=0; i<${#arrayOfColNames[@]}; i++))
+			do
+				echo -e "\t- To Select Using '${arrayOfColNames[i]}' Value Enter '$((i+1))'"
+			done
+                	
+                	read -p "Enter select Option: " selectedColumnNumber
+                	
+                	if (($selectedColumnNumber > 0 && $selectedColumnNumber <= ${#arrayOfColNames[@]}))
+			then
+				read -p "Enter the value to filter by '${arrayOfColNames[$((selectedColumnNumber-1))]}' " filterValue
+								
+				filteredRow=$(awk -F'|' -v colNum="$selectedColumnNumber" -v filter="$filterValue" '$colNum ~ filter' "./DataBases/$1/$tableName")
+
+                		if [ -z "$filteredRow" ]; then
+                                echo -e "\n This $filterValue value doesn't exist !"
+                        else
+                                echo -e "\n$columnNames|\n------------\n$filteredRow"
+                        fi
+                	    	
+                	else
+                		echo -e "\t--------- invaild column --------- \n\t--------- Try again --------- \n\t--------- Enter Table Name --------- " 
+                		selectFromTable $1
+                	fi;;	
+                
+		*)
+			echo -e "\t\t---------  Invaild option --------- \n\t\t---------    Try again\t  --------- \n\t\t--------- Enter Table Name ---------"
+			selectFromTable $1 ;;
+		esac
+	else
+		echo -e "This '$tableName' Table Not Exists\n\t--------- Try again --------- \n\t--------- Enter Table Name --------- "
+	selectFromTable	$1
+	fi
+	
+}
+
+
+
+function deleteFromTable()
+{
+
+read -p "Enter table name: " tableName
+#checking if table name exits
+while ! [[ -f ./DataBases/"$1"/"$tableName" ]];
+do
+	read -p "Table doesn't exist, enter table name: " tableName
+	if [[ $tableName == "EXIT" || $tableName == "exit" ]];
+	then
+		exit
+	fi
+done
+
+#select the deleting method
+select command in "Delete by Primary Key" "Delete by column name" "Delete all records" "Exit"
+do
+	case $REPLY in
+	1) while true;
+		do
+			read -p "Enter primary key: " deletePk
+			pkRowNum=`awk -v check=$deletePk 'BEGIN {
+				FS="|";}
+				{
+					if ($1 == check) {
+						print NR
+						exit 0
+					}
+				}' ./DataBases/"$1"/"$tableName"`
+
+				if [[ $pkRowNum == "" ]];then
+					echo -e "\t  ------------Primary key not found --------"
+				else
+					sed -i "${pkRowNum}d" ./DataBases/"$1"/"$tableName"
+					echo "Row containg PrimaryKey with value $deletePk deleted successfully"
+					exit
+				fi
+		done
+	;;
+	2) while true;
+		do
+			read -p "Enter column name: " deleteColumn
+		
+			columnNames=`sed  -n '1p' ./DataBases/"$1"/"$tableName"`
+			IFS="|"
+			let i=0 #increment to get the number of column
+			for name in $columnNames
+			do
+				((i+=1))
+				if [[ $name == $deleteColumn ]];
+				then
+						while true;
+						do
+							read -p "Enter the value of '$deleteColumn' : " delValue
+							rowNum=`awk -v check=$delValue -v col=$i 'BEGIN {
+							FS="|";}
+							{
+								if ($col == check) {
+									print NR
+									exit 0
+								}
+							}' ./DataBases/"$1"/"$tableName"`
+
+							if [[ $rowNum == "" ]];
+							then
+								echo -e "\t  ------------ Value not found--------- "
+							else
+								sed -i "${rowNum}d" ./DataBases/"$1"/"$tableName"
+								echo -e "\t  --- Row containg $deleteColumn value $delValue deleted successfully ---  "
+								exit
+							fi
+							
+						done
+
+					fi
+			done
+			echo -e "\t  ------------ '$deleteColumn' Invalid column name-----------  "
+		done
+		;;
+		3) read -p "Are you sure you want to erase all records in table $tableName [y | n]: " userAnswer
+			case $userAnswer in
+				"yes"|"y"|"Y"|"Yes"|"YES") 
+					sed -i '2, $d' ./DataBases/"$1"/"$tableName"
+					echo "All records in $tableName TABLE has been deleted successfully"
+				;;
+				"No"|"n"|"N"|"NO"|"no")
+				echo -e "\n\t  ------------ '$tableName' TABLE content deleting Skipped----------- "
+					exit
+				;;
+				*)
+				echo -e "\n \t ----Wrong input exiting deleting the table content ---  \n"
+				echo -e "\t \t Enter valid deleting option---------------\n"
+				;;
+		
+			esac
+			;;
+		4) echo -e "\t  ------------ Ciao 👋🏻 -----------  "
+			exit
+			;;
+
+	esac
+done
+
+}
+
+function updateFromTable()
+{
+		declare -a colNamesArr
+		colNamesArr=()
+		read -p "Enter table name: " tableName
+		#checking if table name exits
+		while ! [[ -f ./DataBases/"$1"/"$tableName" ]];
+		do
+			echo -e " \t \t!!!!!!!! '$tableName' Table doesn't exist  !!!!!!!!\n"
+			read -p "Enter table name: " tableName
+			if [[ $tableName == "EXIT" || $tableName == "exit" ]];
+			then
+				exit
+			fi
+		done
+		columnNames=`sed  -n '1p' ./DataBases/"$1"/"$tableName"`
+		columnTypes=`sed -n '2p' ./DataBases/"$1"/."$tableName".metadata`
+
+		IFS="|"
+		#pushing types into types name array
+			for type in $columnTypes
+			do 
+				colTypesArr+=("$type")
+				let arrLen+=1
+			done
+		echo "$tableName columns --->"
+		columnLen=0
+		for name in $columnNames
+		do
+			if [[ $columnLen == 0 ]];then
+				echo "------ $name ^^Primary Key^^ Can't be modified"
+			else
+				echo "------ $name"
+			fi
+			((columnLen+=1))
+			colNamesArr["$name"]=$columnLen  #append to my associative array key is colname, value is col index
+
+		done 
+		#select the deleting method
+		read -p "Choose the column name you want to update:  " getCol
+
+		#Now we validate the user input
+		while true;
+		do
+			for name in $columnNames
+			do
+				if [[ $name == $getCol  ]];then
+					trigger=0
+					break
+				else
+					trigger=1
+				fi
+			done
+			#Validate the trigger
+			if [[ $trigger == 0 ]];
+			then
+				break
+			else
+				echo -e " \t \t!!!!!!!! Invalid column name  !!!!!!!!\n"
+				read -p "Enter the column name you want to update: " getCol
+			fi
+		done
+		getColIndex=${colNamesArr["$getCol"]}
+		if [[ $getColIndex == 1 ]];
+		then
+			echo -e "\t \t!!!!!!!! Your not authorized to change or update the Primary Key !!!!!!!!"
+			exit
+		fi
+
+		#Get the old value to change (my where condition)
+		read -p "What is the old value you want to update: " oldValue
+		getValue=`awk -v check=$oldValue -v row=$getColIndex 'BEGIN {
+													FS="|";}
+													{
+														if ($row == check) {
+															print("0")
+															exit 0
+														}}' ./DataBases/"$1"/"$tableName"`
+		if  ! [[ $getValue == 0 ]];
+		then
+			echo -e "\t  ------------ Value not found in table records  -----------  "
+		else
+			
+
+			#Getting the type of col for checking
+			let getTypeindex=$getColIndex-1
+			colType="${colTypesArr[$getTypeindex]}"
+
+			read -p "What is the new value:  " newValue
+
+			if [[ $colType == int ]];
+			then
+				case $newValue in
+				+([0-9]))
+					awk -v value="$newValue" -v row=$getColIndex -v  check=$oldValue 'BEGIN {
+														FS=OFS="|";}
+														{
+															if ($row == check) {
+																$row=value
+															}
+															print $0}' ./DataBases/"$1"/"$tableName" > ./DataBases/"$1"/"$tableName".update
+														mv "./DataBases/$1/$tableName.update" "./DataBases/$1/$tableName"
+					echo -e "\t  ------------ Values updated successfully ------------ "
+				;;
+				*) exit
+				;;
+				esac
+			fi
+			if [[ $colType == str ]];
+			then
+				checkAttributeName $newValue
+				isvaild=$?
+				if [[ $isvaild == 1 ]];
+				then
+					awk -v value="$newValue" -v row=$getColIndex -v  check=$oldValue 'BEGIN {
+														FS=OFS="|";}
+														{
+															if ($row == check) {
+																$row=value
+															}
+															print $0}' "./DataBases/$1/$tableName" > "./DataBases/$1/$tableName.update"
+
+														mv "./DataBases/$1/$tableName.update" "./DataBases/$1/$tableName"
+					echo -e "\t  ------------ Values updated successfully ------------"
+				else
+					echo -e "\t  ------------ Invalid input, please enter a valid datatype -----------"
+				fi
+			fi
+		fi
+
+}
+
+
+
+function tableStart()
+{
+
+		read -p "Enter the database name to connect or ("exit"): " dbName
+		if [[ $dbName == "exit" || $dbName == "EXIT" ]];
+		then
+			exit
+		else
+
+			new_db_name=`echo $dbName | tr ' ' '_'`
+			#Now we check if this DataBase name is already there
+			if [[ -d ./DataBases/$new_db_name ]];then
+				echo -e "\n\t------ Connected Succesfully to '$new_db_name' DataBases ------\n"
+				
+				while true; do
+					echo -e "\t\t\t1-List Tables\n\t2-Create Table\t\t 3-Drop Table\n\t4-Insert Into Table\t 5-Select From Table\t\n\t6-Delete From Table\t 7-Update Table\t\n\t\t\t 8-Exit"
+					read -p "Enter table option :- " optionNumber
+					
+					case $optionNumber in 
+						1)
+							echo -e "\t------- Listing Tables ------- "
+							ls ./DataBases/"$new_db_name"
+							;;
+						2)
+							echo -e "\t------- Create table -------"
+							checkTableName "$new_db_name";;
+						3)
+							echo -e "\t------- Drop table -------\n"
+							dropTable "$new_db_name";;
+						
+						4)
+							echo -e "\t------- Insert Into Table -------\nEnter Table name:- "
+							insertInto "$new_db_name";;
+						5)
+							echo -e "\t------- Select From Table -------\nEnter Table name:- "
+							selectFromTable "$new_db_name";;
+						6)
+							echo -e "\t------- Delete From Table -------\n "
+							deleteFromTable "$new_db_name";;
+						7)	
+							echo -e "\t------- Update Table -------\n "
+							updateFromTable "$new_db_name";;
+						8) 
+							echo -e "\n\t\t----   Exit  -----"
+							exit;;
+						*)
+							echo -e "\n!!!!!! ------ Enter vaild option !!!!!! ------ "
+					esac
+				done
+			else
+				echo " ------------Database doesn't exist------------ "
+				tableStart
+			fi
+		fi
+}
+
+tableStart
